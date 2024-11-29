@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body {
+            background-color: black;
+            color: white;
+            font-family: Arial, sans-serif;
+            text-align: center;
+            padding: 20px;
+        }
+        button, label {
+            background-color: blue;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 10px;
+            cursor: pointer;
+            font-size: 16px;
+            border-radius: 5px;
+        }
+        button:hover, label:hover {
+            background-color: darkblue;
+        }
+        input[type="file"] {
+            display: none;
+        }
+        #preview {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin: 20px 0;
+        }
+        #preview img {
+            max-width: 150px;
+            max-height: 150px;
+            margin: 10px;
+            border: 2px solid white;
+            border-radius: 5px;
+        }
+        #progressContainer {
+            margin: 20px 0;
+            display: none;
+        }
+        #progressBar {
+            width: 0;
+            height: 20px;
+            background-color: green;
+            border-radius: 5px;
+        }
+        #progressContainer {
+            background-color: grey;
+            border-radius: 5px;
+            width: 80%;
+            margin: 0 auto;
+        }
+        #statusMessage {
+            margin-top: 10px;
+        }
+        #imageCount {
+            font-size: 18px;
+            margin-top: 10px;
+        }
+        canvas {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <label for="imageInput">Upload Images</label>
+    <input type="file" id="imageInput" multiple accept="image/*">
+    <div id="imageCount"></div>
+    <div id="preview"></div>
+    <div id="progressContainer">
+        <div id="progressBar"></div>
+    </div>
+    <div id="statusMessage"></div>
+    <button id="generatePdf">Generate PDF</button>
+    <button id="reset" style="display: none;">Reset</button>
+    <a id="downloadPdf" style="display: none;" download="images.pdf">Download PDF</a>
+    <canvas id="canvas"></canvas>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script>
+        const { jsPDF } = window.jspdf;
+        const imageInput = document.getElementById('imageInput');
+        const generatePdfButton = document.getElementById('generatePdf');
+        const resetButton = document.getElementById('reset');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const previewContainer = document.getElementById('preview');
+        const progressContainer = document.getElementById('progressContainer');
+        const progressBar = document.getElementById('progressBar');
+        const downloadPdfLink = document.getElementById('downloadPdf');
+        const statusMessage = document.getElementById('statusMessage');
+        const imageCount = document.getElementById('imageCount');
+
+        imageInput.addEventListener('change', () => {
+            previewContainer.innerHTML = ''; // Clear previous previews
+            if (imageInput.files.length === 0) {
+                imageCount.textContent = '';
+                return;
+            }
+            imageCount.textContent = `Total Images: ${imageInput.files.length}`;
+            Array.from(imageInput.files).forEach(file => {
+                const img = document.createElement('img');
+                img.src = URL.createObjectURL(file);
+                previewContainer.appendChild(img);
+            });
+        });
+
+        generatePdfButton.addEventListener('click', async () => {
+            if (imageInput.files.length === 0) {
+                alert('Please upload images first!');
+                return;
+            }
+
+            statusMessage.textContent = 'Processing... Please wait.';
+            progressContainer.style.display = 'block';
+            progressBar.style.width = '0%';
+            const pdf = new jsPDF();
+            for (let i = 0; i < imageInput.files.length; i++) {
+                const file = imageInput.files[i];
+                const img = new Image();
+                img.src = URL.createObjectURL(file);
+
+                await new Promise((resolve) => {
+                    img.onload = () => {
+                        canvas.width = img.width;
+                        canvas.height = img.height;
+                        ctx.drawImage(img, 0, 0);
+                        const imgData = canvas.toDataURL('image/jpeg');
+                        
+                        if (i > 0) pdf.addPage();
+                        pdf.addImage(imgData, 'JPEG', 0, 0, pdf.internal.pageSize.getWidth(), pdf.internal.pageSize.getHeight());
+                        
+                        // Update progress bar
+                        const progress = Math.round(((i + 1) / imageInput.files.length) * 100);
+                        progressBar.style.width = `${progress}%`;
+
+                        resolve();
+                    };
+                });
+            }
+
+            // Save PDF
+            const pdfBlob = pdf.output('blob');
+            const pdfUrl = URL.createObjectURL(pdfBlob);
+            downloadPdfLink.href = pdfUrl;
+            downloadPdfLink.style.display = 'inline-block';
+            statusMessage.textContent = 'PDF Generated! Download it below.';
+            resetButton.style.display = 'inline-block';
+        });
+
+        resetButton.addEventListener('click', () => {
+            imageInput.value = '';
+            previewContainer.innerHTML = '';
+            progressContainer.style.display = 'none';
+            progressBar.style.width = '0%';
+            downloadPdfLink.style.display = 'none';
+            resetButton.style.display = 'none';
+            statusMessage.textContent = '';
+            imageCount.textContent = '';
+        });
+    </script>
+</body>
+</html>

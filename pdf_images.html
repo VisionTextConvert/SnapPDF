@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.7.1/jszip.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #000;
+            color: #6600FF;
+            margin: 0;
+            padding: 0;
+            text-align: center;
+        }
+        header {
+            background-color: #6600FF;
+            color: black;
+            padding: 15px;
+            display: none; /* حذف العنوان */
+        }
+        .container {
+            margin: 20px;
+        }
+        input[type="file"] {
+            margin: 20px 0;
+        }
+        #progressBarContainer {
+            width: 100%;
+            background-color: #ddd;
+            margin-top: 20px;
+        }
+        #progressBar {
+            height: 20px;
+            width: 0;
+            background-color: #6600FF;
+            transition: width 0.2s;
+        }
+        .instructions {
+            font-size: 18px;
+            margin-bottom: 20px;
+        }
+        .waiting-message {
+            display: none;
+            font-size: 18px;
+            color: #FF6600;
+        }
+        .note {
+            font-size: 14px;
+            color: #FFF;
+            margin-top: 20px;
+        }
+        .whatsapp-link {
+            margin-top: 20px;
+            font-size: 18px;
+        }
+        .whatsapp-button {
+            background-color: #25D366;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            text-decoration: none;
+        }
+        .whatsapp-button:hover {
+            background-color: #128C7E;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="instructions">
+            <p>يرجى تحميل ملف PDF لتحويله إلى صور. الملف سيُعالج محليًا ولا يتم إرسال أي بيانات إلى الخوادم.</p>
+        </div>
+        <input type="file" id="fileInput" />
+        <div class="waiting-message" id="waitingMessage">يرجى الانتظار، جاري تجهيز الملف...</div>
+        <div id="progressBarContainer">
+            <div id="progressBar"></div>
+        </div>
+        <div class="note">
+            <p>ملاحظة: جميع الملفات تتم معالجتها على جهازك فقط. لا يتم إرسال أي معلومات إلى الخوادم.</p>
+        </div>
+        <!-- إضافة رابط واتساب -->
+        <div class="whatsapp-link">
+            <p>إذا كنت بحاجة إلى أي مساعدة، يمكنك التواصل معي عبر واتساب:</p>
+            <a href="https://wa.me/message/WIFVWFS3HAWYN1?src=qr" target="_blank">
+                <button class="whatsapp-button">تواصل معي عبر واتساب</button>
+            </a>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('fileInput').addEventListener('change', function(event) {
+            const file = event.target.files[0];
+            if (!file || file.type !== 'application/pdf') {
+                alert('الرجاء تحميل ملف PDF');
+                return;
+            }
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const pdfData = new Uint8Array(e.target.result);
+                convertPdfToImages(pdfData);
+            };
+            reader.readAsArrayBuffer(file);
+        });
+
+        async function convertPdfToImages(pdfData) {
+            const pdf = await pdfjsLib.getDocument(pdfData).promise;
+            const numPages = pdf.numPages;
+            const images = [];
+            let currentPage = 0;
+
+            // إظهار رسالة "جاري تجهيز الملف" عند بدء التحويل
+            document.getElementById('waitingMessage').style.display = 'block';
+
+            const startTime = Date.now(); // بدء حساب الوقت
+
+            for (let pageNum = 1; pageNum <= numPages; pageNum++) {
+                const page = await pdf.getPage(pageNum);
+                const canvas = document.createElement('canvas');
+                const context = canvas.getContext('2d');
+                const viewport = page.getViewport({ scale: 1.5 });
+                canvas.height = viewport.height;
+                canvas.width = viewport.width;
+                await page.render({ canvasContext: context, viewport: viewport }).promise;
+                images.push(canvas.toDataURL());
+
+                // تحديث شريط التقدم
+                currentPage++;
+                updateProgressBar(currentPage, numPages);
+
+                // حساب الوقت المتبقي
+                const elapsedTime = Date.now() - startTime;
+                const estimatedTimeRemaining = (elapsedTime / currentPage) * (numPages - currentPage);
+                const estimatedTimeRemainingSeconds = Math.floor(estimatedTimeRemaining / 1000);
+                const minutes = Math.floor(estimatedTimeRemainingSeconds / 60);
+                const seconds = estimatedTimeRemainingSeconds % 60;
+                document.getElementById('waitingMessage').textContent = `الوقت المتبقي: ${minutes} دقيقة و ${seconds} ثانية`;
+            }
+
+            // بعد اكتمال التحويل، قم بتشغيل التنزيل تلقائيًا
+            if (images.length > 1) {
+                createZip(images);
+            } else {
+                downloadImage(images[0], 'image.png');
+            }
+        }
+
+        function createZip(images) {
+            const zip = new JSZip();
+            images.forEach((imageData, index) => {
+                zip.file(`page${index + 1}.png`, imageData.split(',')[1], { base64: true });
+            });
+            zip.generateAsync({ type: 'blob' }).then(function(content) {
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(content);
+                link.download = 'pdf_images.zip';
+                link.click();
+            });
+        }
+
+        function downloadImage(imageData, filename) {
+            const link = document.createElement('a');
+            link.href = imageData;
+            link.download = filename;
+            link.click();
+        }
+
+        function updateProgressBar(current, total) {
+            const progress = (current / total) * 100;
+            document.getElementById('progressBar').style.width = progress + '%';
+        }
+    </script>
+</body>
+</html>
